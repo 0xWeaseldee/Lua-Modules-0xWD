@@ -1,0 +1,534 @@
+local p = {}
+
+local getArgs = require('Module:Arguments').getArgs
+local Player = require('Module:Player')._player
+local dateExt = require('Module:Date/Ext')
+local String = require('Module:StringUtils')
+local Table = require('Module:Table')
+local Team = require('Module:Team')
+--TODO:Punt
+local _DECAY_DATE1 = dateExt.readTimestamp('2021-12-31 23:59')
+local _DECAY_DATE2 = dateExt.readTimestamp('2022-04-27 23:59')
+local _DECAY_DATE3 = dateExt.readTimestamp('2023-02-27 23:59')
+local _DECAY_DATE4 = dateExt.readTimestamp('2023-06-23 23:59')
+
+function p.get_total_points(frame)
+	local args = getArgs(frame)
+	return p._get_total_points(args)
+end
+--TODO:Change to single function, pull from tournament lists.
+function p._get_total_points(args)
+  	local player = args.player
+  	local object = args.object
+  	local points = 0
+  
+  	local data = mw.ext.LiquipediaDB.lpdb('datapoint', {
+		conditions = '[[name::' .. player .. ']] AND [[type::' .. object .. ']]',
+		query = 'information',
+	  	limit = 1
+	})
+  	
+  	if data ~= nil and data[1] ~= nil then
+		points = data[1].information
+	end
+  	
+	return points
+end
+
+function p.team(team)
+  	return Team.team(_, team)
+end
+--Below can be pulled
+function p._get_event_data(pagename)
+  	local conditions = '[[pagename::' .. string.gsub(pagename, ' ', '_') .. ']] AND [[extradata_prizepoints::>]] AND [[players::>]] AND [[placement::>]] AND [[participant::!Tbd]] AND [[participant::!TBD]]'
+	mw.logObject(conditions)
+  	local data = mw.ext.LiquipediaDB.lpdb('placement', {
+		conditions = conditions,
+		query = 'icon, pagename, players, extradata, placement, participant, type, date',
+	  	limit = 500
+	})
+  	if type(data[1]) == 'table' then
+		return data
+	end
+	
+end
+
+function tableSortCat_events(a, b)
+	return a.number < b.number
+end
+
+function tableSortCat_data(a, b)
+	return (a.total > b.total) or (a.total == b.total and a.team < b.team) or (a.total == b.total and a.team == b.team and a.player < b.player)
+end
+
+--TODO:Needs a refactor
+function p._intro(point_name, events)
+	
+  	local table = mw.html.create('table')
+			:addClass('wikitable')
+			:css('margin-top', '0')
+			:css('line-height', '25px')
+			:css('text-align', 'center')
+    	
+	local header2 =mw.html.create('tr')
+	local preSeasonCount = 0
+	local split1Count = 0
+	local split2Count = 0
+	local preSeason23Count = 0
+	local split123Count = 0
+	local split223Count = 0
+	
+	for i, event in ipairs(events) do
+		local eventDate = dateExt.readTimestamp(event.date)
+		
+	
+		--TODO:Punt to function
+		if event.show ~= 'false' then
+			if eventDate < _DECAY_DATE1 then
+				header2:tag('th')
+				:css('width', '50px')
+				:css('background', 'rgb(251,223,223)')
+				:wikitext(event.display):done()
+				preSeasonCount = preSeasonCount + 1
+
+			else
+				if eventDate < _DECAY_DATE2 then
+					header2:tag('th')
+					:css('width', '50px')
+					:css('background', 'rgb(251,223,223)')
+					:wikitext(event.display):done()
+					split1Count = split1Count + 1
+				else
+					if eventDate < _DECAY_DATE3 then
+						header2:tag('th')
+						:css('width', '50px')
+						:css('background', 'rgb(255,255,255)')
+						:wikitext(event.display):done()
+						split2Count = split2Count + 1
+					else
+						header2:tag('th')
+						:css('width', '50px')
+						:css('background', 'rgb(255,255,255)')
+						:wikitext(event.display):done()
+						preSeason23Count = preSeason23Count + 1
+				end
+			end
+		end
+	end
+end
+	
+	local preSeasonWidth = tostring(preSeasonCount * 50) .. 'px'
+	local split1Width = tostring(split1Count * 50) .. 'px'
+	local split2Width = tostring(split2Count * 50) .. 'px'
+	local preSeason23Width = tostring(preSeason23Count * 50) .. 'px'
+	local split123Width = tostring(split123Count * 50) .. 'px'
+
+	local header = mw.html.create('tr')
+	header:tag('th')
+		:css('width', '300px')
+		:attr('rowspan', '2')
+		:wikitext('Most Recent Team'):done()
+	header:tag('th')
+		:css('width', '185px')
+		:attr('rowspan', '2')
+		:wikitext('Player'):done()
+	header:tag('th')
+		:css('width', '75px')
+		:attr('rowspan', '2')
+		:wikitext(point_name):done()
+
+
+	
+	--TODO:refactor into variables
+	if (preSeasonCount ~= 0) then
+		header:tag('th')
+		:css('width', preSeasonWidth)
+		:attr('colspan', preSeasonCount)
+		:wikitext("Pre Season"):done()
+
+	end
+	if (split1Count ~= 0) then 
+		header:tag('th')
+		:css('width', split1Width)
+		:attr('colspan', split1Count)
+		:wikitext("Split 1"):done()
+	end
+	if (split2Count ~= 0) then 
+		header:tag('th')
+		:css('width', split2Width)
+		:attr('colspan', split2Count)
+		:wikitext("Split 2"):done()
+	end
+	if (preSeason23Count ~= 0) then 
+		header:tag('th')
+		:css('width', preSeason23Width)
+		:attr('colspan', preSeason23Count)
+		:wikitext("Preseason"):done()
+	end
+	if (split123Count ~= 0) then 
+		header:tag('th')
+		:css('width', split123Width)
+		:attr('colspan', split123Count)
+		:wikitext("Split 1"):done()
+	end
+	
+	
+	table:node(header)
+	table:node(header2)
+
+	return table
+end
+
+
+function p.create(frame)
+	local args = getArgs(frame)
+	return p._create(args)
+end
+
+function p._main(data, events, storageobj, store, storeonly, regional)
+  	if store == true then
+  		p._store_data(storageobj, data)
+  	end
+  	if storeonly == 'true' then
+		return ''
+	end
+
+	--TODO: Remove Hardcoded Colours
+	local row = mw.html.create('tr')
+	row:tag('td')
+		:css('text-align', 'left')
+		:wikitext((data.team or '') ~= '' and p.team(data.team) or '')
+  	row:tag('td')
+  		:css('text-align', 'left')
+  		:wikitext(Player({data.player, flag = data.flag}))
+  	row:tag('td')
+  		:wikitext('<b>' .. (data.total or '0') .. '</b>')
+	for i, event in ipairs(events) do
+		if event.show ~= 'false' then
+			local placement = tonumber(mw.text.split((data['placement'][i] or '9999'), '-', true)[1])
+			if (placement or 0) < 5 then
+  				row:tag('td')
+					:addClass('placement-' .. (placement or 0))
+					:css('color', 'white')
+  					:wikitext('<b>' .. (data['points'][i] or '') .. '</b>')
+			elseif placement < 9 then
+  				row:tag('td')
+					:css('background-color', '#265ca7')
+					:css('color', 'white')
+  					:wikitext('<b>' .. (data['points'][i] or '') .. '</b>')
+			elseif placement < 17 then
+  				row:tag('td')
+					:css('background-color', '#629ee1')
+					:css('color', 'white')
+  					:wikitext('<b>' .. (data['points'][i] or '') .. '</b>')
+			elseif placement < 33 then
+  				row:tag('td')
+					:css('background-color', '#bbd7ff')
+					:css('color', 'white')
+  					:wikitext('<b>' .. (data['points'][i] or '') .. '</b>')
+			elseif placement ~= 9999 then
+  				row:tag('td')
+					:css('background-color', '#445154')
+					:css('color', 'white')
+  					:wikitext('<b>' .. (data['points'][i] or '') .. '</b>')
+			else
+  				row:tag('td')
+  					:wikitext('')
+			end
+		end
+	end
+	
+	return row
+end
+
+function p._create(args)
+  	local offset = tonumber((args.offset or '') ~= '' and args.offset or 0) + 1
+  	local limit = tonumber((args.limit or '') ~= '' and args.limit or 1000) + offset
+  	local data = {}
+  	local index = {}
+  	local events = {}
+  	local additional = {}
+	local regional = args.regional or false
+  	local additional_event_data = {}
+  	local additionalname = (args.additionalname or '') ~= '' and args.additionalname or 'Manually added points' --How to do this correctly?
+  	local store = args.store
+  	local storageobj = args.storageobject or ''
+  	if storageobj ~= '' and mw.title.getCurrentTitle().nsText == '' then
+		store = true
+	end
+
+  	local storeonly = args.storeonly or ''
+--TODO: Find out why this is so complicated.
+	for key, item in pairs(args) do
+		if item == '' or item == '\n' then
+	  		args[key] = nil
+	  	end
+	
+		if type(key) == 'string' and item ~= '' then
+			if key:match('^(event)(%d+)(additional)(%d+)$') then
+				local _, event_index, _, add_index = key:match('^(event)(%d+)(additional)(%d+)$')
+				local index = tonumber(event_index)
+		  		if s[index] ~= 'true' then
+					s[index] = 'true'
+					additional_event_data[index] = {}
+					additional_event_data[index][1] = {
+					placement = args[key .. 'place'],
+					participant = args[key],
+					extradata = { prizepoints = args[key .. 'points']},
+					players = { 
+						player1 = args[key .. 'player1'],
+						player1flag = args[key .. 'player1flag'],
+						player2 = args[key .. 'player2'],
+						player2flag = args[key .. 'player2flag'],
+						player3 = args[key .. 'player3'],
+						player3flag = args[key .. 'player3flag'],
+						player4 = args[key .. 'player4'] or '',
+						player4flag = args[key .. 'player4flag'] or '',
+						}
+					}
+				else
+					additional_event_data[index][#additional_event_data + 1] = {
+					placement = args[key .. 'place'],
+					participant = args[key],
+					extradata = { prizepoints = args[key .. 'points']},
+					players = { 
+						player1 = args[key .. 'player1'],
+						player1flag = args[key .. 'player1flag'],
+						player2 = args[key .. 'player2'],
+						player2flag = args[key .. 'player2flag'],
+						player3 = args[key .. 'player3'],
+						player3flag = args[key .. 'player3flag'],
+						player4 = args[key .. 'player4'] or '',
+						player4flag = args[key .. 'player4flag'] or '',
+						}
+					}
+				end
+			elseif key:match('^(event)(%d*)$') then
+				local _, event_index = key:match('^(event)(%d*)$')
+				table.insert(events, { page = args['event' .. event_index], number = tonumber(event_index), show = args['event' .. event_index .. 'display'] or true })
+			elseif key:match('^(additional)(%d+)$') then
+				local param, add_index = key:match('^(additional)(%d+)$')
+				if additional[1] == nil then
+					additional[1] = { 
+					placement = args[param .. add_index .. 'place'],
+					participant = args[param .. add_index],
+					extradata = { prizepoints = args[param .. add_index .. 'points']},
+					players = { 
+						player1 = args[param .. add_index .. 'player1'],
+						player1flag = args[param .. add_index .. 'player1flag'],
+						player2 = args[param .. add_index .. 'player2'],
+						player2flag = args[param .. add_index .. 'player2flag'],
+						player3 = args[param .. add_index .. 'player3'],
+						player3flag = args[param .. add_index .. 'player3flag'],
+						player4 = args[param .. add_index .. 'player4'] or '',
+						player4flag = args[param .. add_index .. 'player4flag'] or '',
+						}
+					}
+				else
+					additional[#additional + 1] = { 
+					placement = args[param .. add_index .. 'place'],
+					participant = args[param .. add_index],
+					extradata = { prizepoints = args[param .. add_index .. 'points']},
+					players = { 
+						player1 = args[param .. add_index .. 'player1'],
+						player1flag = args[param .. add_index .. 'player1flag'],
+						player2 = args[param .. add_index .. 'player2'],
+						player2flag = args[param .. add_index .. 'player2flag'],
+						player3 = args[param .. add_index .. 'player3'],
+						player3flag = args[param .. add_index .. 'player3flag'],
+						player4 = args[param .. add_index .. 'player4'] or '',
+						player4flag = args[param .. add_index .. 'player4flag'] or '',
+						}
+					}
+		  		end
+			end
+		end
+	end
+  	
+  	if #events == 0 then
+		return 'No events entered.'
+  	end
+  	
+  	table.sort(events, tableSortCat_events)
+
+	for i, event in ipairs(events) do
+  		local data_event = p._get_event_data(args['event' .. event.number]) or {}
+		mw.logObject(data_event)
+
+		if type(data_event[1]) == 'table' then
+			data, index = p._merge_data(data_event, data, index, i, regional)
+		end
+		if type(additional_event_data[event.number]) == 'table' and type(additional_event_data[event.number][1]) == 'table' then
+			data, index = p._merge_data(additional_event_data[event.number], data, index, i, regional)
+	  	end
+		local event_link = (args['event' .. event.number .. 'link'] or '') and args['event' .. event.number .. 'link'] or args['event' .. event.number]
+		event.display = (data_event[1] ~= nil and data_event[1].icon or '')  ~= '' and ('[[File:Halo HCS logo.png|35px|link=' .. event_link .. ']]')
+		event.date = (data_event[1].date or '2024-12-31 23:59')
+		
+	end
+	
+	--mw.logObject(data)
+	
+  	if type(additional[1]) == 'table' then
+		k = k + 1
+		data, index = p._merge_data(additional, data, index, k, regional)
+		events[k] = {show = args.additionalshow or true, display = additionalname }
+  	end
+  	
+
+	if regional ~= "false" then 
+		filterData = Table.filter(data, function(filterNonRegionTeams) return filterNonRegionTeams.region_index ~= 0 end)
+		data = filterData
+	end
+	
+
+  	table.sort(data, tableSortCat_data)
+  	
+  	local point_name = (args.points_name or '') ~= '' and args.points_name or 'Points'
+  	
+	local wrapper = mw.html.create('div'):addClass('table-responsive')
+	
+  	local table = p._intro(point_name, events)
+  	if storeonly == 'true' then
+		output = ''
+	end
+  	
+  	if type(data[1]) == 'table' then
+  		for i = offset, math.min(#data, limit) do
+			table:node(p._main(data[i], events, storageobj, store, storeonly, regional))
+		end
+	end
+	wrapper:node(table)
+	
+	return wrapper
+end
+
+function p._merge_data(data_event, data, index, s, regional)
+	local regionIndex = 0
+	
+	
+  	for _, dataPass in ipairs(data_event) do
+		local eventRegion = dataPass.extradata.location
+		local temp_points = p._weight_points(dataPass)
+		regionIndex = 0
+		regionBool = p._checkRegion(eventRegion,regional)
+		if regionBool ~= false then
+			regionIndex = 1
+		end
+		--mw.logObject(regionIndex)
+		
+		local updatePlayer = function(playerIndex)
+			local player = dataPass.players['player'.. playerIndex] or dataPass.players['p'.. playerIndex]
+			if String.isNotEmpty(player) then
+				if not index[player] then
+					local flag = dataPass.players['player'..playerIndex..'flag'] or dataPass.players['p'..playerIndex..'flag']
+					table.insert(data, {player = player, total = 0, flag = flag, team = '', recent_date = '', placement = {}, points = {}, region_index = 0})
+					index[player] = #data
+				end
+				local playerLocation = index[player]
+				data[playerLocation]['placement'][s] = dataPass.placement
+				data[playerLocation]['points'][s] = temp_points
+				data[playerLocation]['total'] = data[playerLocation]['total'] + temp_points
+				data[playerLocation]['team'] = dataPass.participant
+				data[playerLocation]['recent_date'] = dataPass.date
+				data[playerLocation]['region_index'] = data[playerLocation]['region_index'] + regionIndex
+				if (regionBool ~= "false" and dataPass.extradata.location ~= "United States") then
+					--mw.logObject(dataPass.extradata.type)
+					--mw.logObject(dataPass.extradata.location)
+					data[playerLocation]['region'] = dataPass.extradata.location
+				end
+				--mw.logObject(data[playerLocation]['region'] )
+			end
+		end
+		
+		updatePlayer(1)
+		updatePlayer(2)
+		updatePlayer(3)
+		updatePlayer(4)
+
+		if regionBool ~= "false" then
+			regionIndex = regionIndex + 1
+		end
+	end
+	--mw.logObject(data)
+	return data, index
+end
+--TODO: When is this needed? Can this be done to seed future tournaments?
+function p._weight_points(dataPass)
+
+	local raw_points = (tonumber(string.gsub(dataPass.extradata.prizepoints, ',', '') or '0') or 0)
+	local eventDate = dateExt.readTimestamp(dataPass.date)
+	
+	if dataPass.type == 'Offline' then
+		temp_points = raw_points / 4
+		
+	else
+		local location = dataPass.extradata.location
+		local prdRatio = p._regionalPointsMod(dataPass.extradata.location)
+		temp_points = prdRatio * (raw_points / 4)
+	end
+	
+	if eventDate < _DECAY_DATE1 then
+		temp_points = 0.1 * temp_points
+	end
+	if eventDate < _DECAY_DATE2 then
+		temp_points = 0.25 * temp_points
+	end
+	
+	return temp_points
+
+end
+--TODO: Is this still calculated?
+function p._regionalPointsMod(location)
+
+	local prd
+
+	if location == 'North America' then
+		prd = 1
+	elseif location == 'Europe' then
+		prd = 1
+	elseif location == 'Mexico' then
+		prd = 1
+	elseif location == 'Oceania' then
+		prd = 1
+	else
+		prd = 0
+	end
+	
+	return prd
+	
+end
+
+--TODO: Simplify
+function p._checkRegion(location, regional)
+
+	local check 
+	
+	if location == regional then
+		check = true
+	else
+		check = false
+	end
+	
+	return check
+	
+end
+
+
+
+--TODO:Store for infobox team/person?
+function p._store_data(storageobj, data)
+	mw.ext.LiquipediaDB.lpdb_datapoint(storageobj .. '_' .. data.player, {
+	  	type = storageobj,
+  		name = data.player,
+		information = data.total or 0,
+	  	extradata = mw.ext.LiquipediaDB.lpdb_create_json{
+			flag = data.flag,
+			team = data.team,
+			recent_date = data.recent_date,
+			region = data.region
+		}
+	})
+end
+  
+return p
